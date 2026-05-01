@@ -65,22 +65,66 @@ export default function ComplianceModule() {
   }, []);
 
   const fetchData = async () => {
-    const [rRes, tRes, skRes] = await Promise.all([
-      fetch(`${BASE}/api/reports/generate`),
-      fetch(`${BASE}/api/reports/timeline`),
-      fetch(`${BASE}/api/reports/risk-score`)
-    ]);
-    setReport(await rRes.json());
-    setTimeline(await tRes.json());
-    setRisk(await skRes.json());
+    try {
+      const [rRes, tRes, skRes] = await Promise.all([
+        fetch(`${BASE}/api/reports/generate`),
+        fetch(`${BASE}/api/reports/timeline`),
+        fetch(`${BASE}/api/reports/risk-score`)
+      ]);
+      if (!rRes.ok || !tRes.ok || !skRes.ok) throw new Error('One or more report endpoints failed');
+      const [reportData, timelineData, riskData] = await Promise.all([
+        rRes.json(), tRes.json(), skRes.json()
+      ]);
+      setReport(reportData);
+      setTimeline(timelineData);
+      setRisk(riskData);
+    } catch (e) {
+      console.error('Failed to fetch compliance data:', e);
+    }
   };
 
   const handleExport = (type) => {
+    if (!report) return;
     setLoading(true);
-    setTimeout(() => {
+    try {
+      if (type === 'json') {
+        const blob = new Blob([JSON.stringify({ report, timeline, risk }, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${report.report_id || 'aegis-report'}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+      } else if (type === 'pdf') {
+        // Build a printable HTML page and open it for the user to save as PDF
+        const html = `<!DOCTYPE html><html><head><title>${report.report_id}</title>
+          <style>body{font-family:sans-serif;padding:40px;color:#111}h1{color:#1a3d2b}h2{color:#3d7a53}
+          .finding{border:1px solid #ccc;border-radius:8px;padding:16px;margin:12px 0}
+          .fix{background:#f0faf4;padding:12px;border-radius:6px;margin-top:8px}</style></head>
+          <body>
+          <h1>AegisFuzz Security Report — ${report.report_id}</h1>
+          <p><strong>Standard:</strong> ${report.compliance_standard}</p>
+          <p><strong>Generated:</strong> ${report.timestamp}</p>
+          <p>${report.summary}</p>
+          <h2>Findings</h2>
+          ${report.findings.map(f => `
+            <div class="finding">
+              <h3>${f.title} <span style="color:${f.severity==='Critical'?'#c0392b':'#d4a017'}">[${f.severity} — ${f.risk_score}]</span></h3>
+              <p>${f.description}</p>
+              <div class="fix"><strong>Fix:</strong> ${f.fix}</div>
+            </div>`).join('')}
+          <h2>Risk Score: ${risk?.score} — ${risk?.label}</h2>
+          </body></html>`;
+        const win = window.open('', '_blank');
+        win.document.write(html);
+        win.document.close();
+        win.print();
+      }
+    } catch (e) {
+      console.error('Export failed:', e);
+    } finally {
       setLoading(false);
-      alert(`Exporting as ${type.toUpperCase()}... Check your downloads folder.`);
-    }, 1500);
+    }
   };
 
   return (
