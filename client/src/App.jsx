@@ -16,6 +16,7 @@ import ComplianceModule from './ComplianceModule.jsx';
 import AiRemediationModule from './AiRemediationModule.jsx';
 import SettingsModule from './SettingsModule.jsx';
 import IntelligenceModule from './IntelligenceModule.jsx';
+import DemoMode from './DemoMode.jsx';
 
 // ── Champagne/Forest color tokens ──────────────────────────────
 const C = {
@@ -43,26 +44,52 @@ const Badge = ({ children, color = 'champagne' }) => {
   );
 };
 
-const StatCard = ({ icon: Icon, label, value, accent = false, delay = 0 }) => (
-  <motion.div
-    initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay }}
-    className="glass-panel forest-border p-4 flex flex-col gap-2 relative overflow-hidden group"
-  >
-    <div className="flex justify-between items-start">
-      <div style={{ background: accent ? 'rgba(247,231,206,0.1)' : 'rgba(61,122,83,0.1)', color: accent ? C.champagne : C.forestBright }}
-        className="p-2 rounded-lg">
-        <Icon size={18} />
+const StatCard = ({ icon: Icon, label, value, accent = false, delay = 0 }) => {
+  const valRef = useRef(null);
+  const prevValue = useRef(null);
+
+  useEffect(() => {
+    const el = valRef.current;
+    if (!el) return;
+    // Only roll up numeric values
+    const raw = typeof value === 'string' ? parseFloat(value.replace(/[^0-9.]/g, '')) : value;
+    if (isNaN(raw) || raw === prevValue.current) { el.textContent = value; return; }
+    prevValue.current = raw;
+    const suffix = typeof value === 'string' ? value.replace(/[0-9.,]/g, '') : '';
+    let start = null;
+    const step = (ts) => {
+      if (!start) start = ts;
+      const p = Math.min((ts - start) / 800, 1);
+      const eased = 1 - Math.pow(1 - p, 3); // ease-out cubic
+      el.textContent = Math.floor(eased * raw).toLocaleString() + suffix;
+      if (p < 1) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  }, [value]);
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay }}
+      className="glass-panel forest-border p-4 flex flex-col gap-2 relative overflow-hidden group"
+    >
+      <div className="flex justify-between items-start">
+        <div style={{ background: accent ? 'rgba(247,231,206,0.1)' : 'rgba(61,122,83,0.1)', color: accent ? C.champagne : C.forestBright }}
+          className="p-2 rounded-lg">
+          <Icon size={18} />
+        </div>
+        <span className="text-[9px] text-white/20 font-mono">LIVE</span>
       </div>
-      <span className="text-[9px] text-white/20 font-mono">LIVE</span>
-    </div>
-    <div>
-      <div className="text-[10px] text-white/40 uppercase tracking-wider mb-1">{label}</div>
-      <div style={{ color: accent ? C.champagne : 'white' }} className="text-2xl font-mono font-bold">{value}</div>
-    </div>
-    <div className="absolute bottom-0 left-0 h-[2px] w-0 group-hover:w-full transition-all duration-500"
-      style={{ background: `linear-gradient(90deg, ${C.forest}, ${C.champagne})` }} />
-  </motion.div>
-);
+      <div>
+        <div className="text-[10px] text-white/40 uppercase tracking-wider mb-1">{label}</div>
+        <div ref={valRef} style={{ color: accent ? C.champagne : 'white' }} className="text-2xl font-mono font-bold">
+          {value}
+        </div>
+      </div>
+      <div className="absolute bottom-0 left-0 h-[2px] w-0 group-hover:w-full transition-all duration-500"
+        style={{ background: `linear-gradient(90deg, ${C.forest}, ${C.champagne})` }} />
+    </motion.div>
+  );
+};
 
 const SidebarItem = ({ icon: Icon, label, active, onClick }) => (
   <div onClick={onClick}
@@ -106,6 +133,8 @@ export default function App() {
   const [iotStats, setIotStats] = useState({ cpu: 0, mem: 0, crashes: 0 });
   const iotTimerRef = useRef(null);
   const [loadingIot, setLoadingIot] = useState(false);
+
+  const [demoMode, setDemoMode] = useState(false);
 
   const ws = useRef(null);
   const termRef = useRef(null);
@@ -264,7 +293,10 @@ export default function App() {
           <p className="text-sm text-white/40 mt-1">Real-time medical system fuzzing telemetry</p>
         </div>
         {stats.crashes_unique > 0 && (
-          <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }}
+          <motion.div
+            initial={{ scale: 0.85, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ type: 'spring', stiffness: 400, damping: 20 }}
             className="flex items-center gap-2 px-4 py-2 rounded-lg border"
             style={{ background: 'rgba(192,57,43,0.15)', borderColor: 'rgba(192,57,43,0.4)', color: '#e74c3c' }}>
             <AlertTriangle size={16} />
@@ -745,6 +777,7 @@ export default function App() {
 
   // ── Main Render ──
   return (
+    <>
     <div className="flex h-screen font-sans overflow-hidden" style={{ background: '#0b0f0c', color: '#fdf3e4' }}>
 
       {/* Sidebar */}
@@ -820,13 +853,24 @@ export default function App() {
                 : { background: `linear-gradient(135deg, ${C.champagne}, ${C.champagneDim})`, color: '#0b0f0c' }}>
               {running ? <><Square size={14} /> Stop Session</> : <><Play size={14} /> Start Fuzzing</>}
             </button>
+            <button onClick={() => setDemoMode(true)}
+              className="flex items-center gap-2 px-4 py-2 rounded-full text-sm font-bold transition-all"
+              style={{ background: 'rgba(78,158,106,0.15)', color: '#4e9e6a', border: '1px solid rgba(78,158,106,0.4)' }}>
+              <Sparkles size={14} /> Demo Mode
+            </button>
           </div>
         </header>
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-7 custom-scrollbar">
           <AnimatePresence mode="wait">
-            <motion.div key={activeModule} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+            <motion.div
+              key={activeModule}
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: 20 }}
+              transition={{ duration: 0.22, ease: 'easeInOut' }}
+            >
               {activeModule === 'Dashboard' && <Dashboard />}
               {activeModule === 'IoT' && <IoTFirmware />}
               {activeModule === 'DICOM' && <DicomModule />}
@@ -848,5 +892,10 @@ export default function App() {
         </div>
       </main>
     </div>
+    {/* Demo Mode Overlay */}
+    <AnimatePresence>
+      {demoMode && <DemoMode onClose={() => setDemoMode(false)} />}
+    </AnimatePresence>
+    </>
   );
 }
