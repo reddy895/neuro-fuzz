@@ -1,51 +1,61 @@
 import random
+from datetime import datetime
+from api.ehr_db import get_all_vulnerabilities
+
 
 class AIAnalyzer:
     @staticmethod
-    def analyze_crash(crash_data):
+    def analyze_crash(crash_data: dict):
         """
-        Simulates AI-powered crash analysis.
-        In a real scenario, this would send stack traces to an LLM.
+        Analyzes a crash event detected by the FuzzEngine.
+        Maps the crash type to a specific vulnerability in the EHR vulnerability registry.
+        Returns a detailed report with exploitation payload and remediation guidance.
         """
-        vulnerabilities = [
-            {
-                "type": "Buffer Overflow in DICOM Parser",
-                "severity": "Critical",
-                "cwe": "CWE-120",
-                "exploitability": "High",
-                "root_cause": "Unsafe strcpy() call when handling patient name metadata in DICOM image header. Allows arbitrary code execution on the PACS server.",
-                "recommendation": "Use strncpy() or a safer string handling library. Implement length validation for all incoming DICOM metadata fields.",
-                "compliance_impact": "HIPAA Breach Risk, FDA Recall (Class I)",
-                "patient_safety": "CRITICAL - Potential manipulation of patient diagnostic imagery."
-            },
-            {
-                "type": "Unauthenticated EHR API Exposure",
-                "severity": "High",
-                "cwe": "CWE-306",
-                "exploitability": "High",
-                "root_cause": "REST API endpoint /api/v1/patients/records lacks proper JWT token validation during malformed JSON payload injection.",
-                "recommendation": "Enforce strict schema validation and ensure authentication middleware correctly handles edge-case payloads.",
-                "compliance_impact": "Severe HIPAA/GDPR Violation",
-                "patient_safety": "HIGH - Risk of unauthorized access to sensitive medical records."
-            },
-            {
-                "type": "Use-After-Free in IoT Telemetry",
-                "severity": "Critical",
-                "cwe": "CWE-416",
-                "exploitability": "Medium",
-                "root_cause": "Accessing memory after free() in the Bluetooth Low Energy (BLE) connection pool of the infusion pump firmware.",
-                "recommendation": "Set pointers to NULL after freeing and use smart pointers. Isolate BLE stack from core pump logic.",
-                "compliance_impact": "FDA Regulatory Non-Compliance",
-                "patient_safety": "CRITICAL - Potential denial of service leading to missed medical dosage."
-            }
-        ]
-        
-        # Return a random vulnerability report for simulation
-        report = random.choice(vulnerabilities)
+        vulnerabilities = get_all_vulnerabilities()
+
+        # If the crash_data specifies a vulnerability index, use it.
+        # Otherwise pick one randomly (simulates AI classification)
+        vuln_index = crash_data.get("vuln_index", random.randint(0, len(vulnerabilities) - 1))
+        vuln = vulnerabilities[vuln_index]
+
         return {
-            "id": f"VULN-{random.randint(1000, 9999)}",
-            "timestamp": "2026-05-01 13:45:00",
-            **report
+            "id": vuln["id"],
+            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "target": vuln["target"],
+            "type": vuln["type"],
+            "cwe": vuln["cwe"],
+            "severity": vuln["severity"],
+            "exploitability": vuln["exploitability"],
+            "root_cause": vuln["description"],
+            "recommendation": vuln["remediation"],
+            "compliance_impact": vuln["compliance_impact"],
+            "patient_safety": vuln["patient_safety"],
+            "exploitation_payload": vuln["exploitation_payload"],
+            "exploitation_explanation": vuln["exploitation_explanation"],
         }
+
+    @staticmethod
+    def analyze_all():
+        """Returns all known vulnerabilities as a full sweep report."""
+        vulns = get_all_vulnerabilities()
+        return [
+            {
+                "id": v["id"],
+                "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "target": v["target"],
+                "type": v["type"],
+                "cwe": v["cwe"],
+                "severity": v["severity"],
+                "exploitability": v["exploitability"],
+                "root_cause": v["description"],
+                "recommendation": v["remediation"],
+                "compliance_impact": v["compliance_impact"],
+                "patient_safety": v["patient_safety"],
+                "exploitation_payload": v["exploitation_payload"],
+                "exploitation_explanation": v["exploitation_explanation"],
+            }
+            for v in vulns
+        ]
+
 
 analyzer = AIAnalyzer()

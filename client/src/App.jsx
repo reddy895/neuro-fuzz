@@ -1,385 +1,813 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { 
-  Activity, Shield, Zap, Terminal, AlertTriangle, 
-  Cpu, HardDrive, BarChart3, Settings, Upload, 
-  Database, Brain, Users, Globe, Play, Square,
-  ChevronRight, Search, Bell
+import {
+  Activity, Shield, Zap, Terminal, AlertTriangle,
+  Cpu, HardDrive, BarChart3, Settings, Upload,
+  Database, Brain, Play, Square, ChevronRight,
+  Search, Bell, HeartPulse, FileText, Lock, Code2,
+  Microchip, Wifi, Flame, ChevronDown, CheckCircle2, Sparkles
 } from 'lucide-react';
-import { 
-  LineChart, Line, XAxis, YAxis, CartesianGrid, 
-  Tooltip, ResponsiveContainer, AreaChart, Area 
-} from 'recharts';
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import DicomModule from './DicomModule.jsx';
+import EhrModule from './EhrModule.jsx';
+import NeuroFuzzModule from './NeuroFuzzModule.jsx';
+import ComplianceModule from './ComplianceModule.jsx';
+import AiRemediationModule from './AiRemediationModule.jsx';
+import SettingsModule from './SettingsModule.jsx';
 
-// --- Components ---
+// ── Champagne/Forest color tokens ──────────────────────────────
+const C = {
+  champagne: '#f7e7ce',
+  champagneDim: '#c9b99a',
+  forest: '#3d7a53',
+  forestBright: '#4e9e6a',
+  danger: '#c0392b',
+  warning: '#d4a017',
+  info: '#2e86ab',
+};
 
-const StatCard = ({ icon: Icon, label, value, color, delay }) => (
-  <motion.div 
-    initial={{ opacity: 0, y: 20 }}
-    animate={{ opacity: 1, y: 0 }}
-    transition={{ delay }}
-    className="glass-panel p-4 hacker-border flex flex-col gap-2 relative overflow-hidden group"
+// ── Reusable components ────────────────────────────────────────
+const Badge = ({ children, color = 'champagne' }) => {
+  const colors = {
+    champagne: 'bg-[#f7e7ce]/10 text-[#f7e7ce] border-[#f7e7ce]/30',
+    forest: 'bg-[#3d7a53]/15 text-[#4e9e6a] border-[#3d7a53]/40',
+    danger: 'bg-red-900/20 text-red-400 border-red-700/40',
+    warning: 'bg-yellow-900/20 text-yellow-400 border-yellow-700/40',
+  };
+  return (
+    <span className={`text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded border ${colors[color]}`}>
+      {children}
+    </span>
+  );
+};
+
+const StatCard = ({ icon: Icon, label, value, accent = false, delay = 0 }) => (
+  <motion.div
+    initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay }}
+    className="glass-panel forest-border p-4 flex flex-col gap-2 relative overflow-hidden group"
   >
     <div className="flex justify-between items-start">
-      <div className={`p-2 rounded-lg bg-${color}/10 text-${color}`}>
-        <Icon size={20} />
+      <div style={{ background: accent ? 'rgba(247,231,206,0.1)' : 'rgba(61,122,83,0.1)', color: accent ? C.champagne : C.forestBright }}
+        className="p-2 rounded-lg">
+        <Icon size={18} />
       </div>
-      <div className="text-[10px] text-white/30 font-mono">LIVE_STREAM</div>
+      <span className="text-[9px] text-white/20 font-mono">LIVE</span>
     </div>
     <div>
-      <div className="text-xs text-white/50 uppercase tracking-wider">{label}</div>
-      <div className={`text-2xl font-mono font-bold ${color === 'cyber-green' ? 'text-cyber-green' : 'text-white'}`}>
-        {value}
-      </div>
+      <div className="text-[10px] text-white/40 uppercase tracking-wider mb-1">{label}</div>
+      <div style={{ color: accent ? C.champagne : 'white' }} className="text-2xl font-mono font-bold">{value}</div>
     </div>
-    <div className="absolute bottom-0 left-0 h-[2px] bg-cyber-green/30 w-0 group-hover:w-full transition-all duration-500" />
+    <div className="absolute bottom-0 left-0 h-[2px] w-0 group-hover:w-full transition-all duration-500"
+      style={{ background: `linear-gradient(90deg, ${C.forest}, ${C.champagne})` }} />
   </motion.div>
 );
 
 const SidebarItem = ({ icon: Icon, label, active, onClick }) => (
-  <div 
-    onClick={onClick}
-    className={`flex items-center gap-3 px-4 py-3 cursor-pointer transition-all duration-200 group
-      ${active ? 'bg-cyber-green/10 text-cyber-green border-r-2 border-cyber-green' : 'text-white/50 hover:text-white hover:bg-white/5'}`}
-  >
-    <Icon size={20} className={active ? 'drop-shadow-[0_0_5px_rgba(0,255,65,0.5)]' : ''} />
+  <div onClick={onClick}
+    className="flex items-center gap-3 px-4 py-3 cursor-pointer transition-all duration-200"
+    style={{
+      background: active ? 'rgba(247,231,206,0.06)' : 'transparent',
+      color: active ? C.champagne : 'rgba(255,255,255,0.4)',
+      borderRight: active ? `2px solid ${C.champagne}` : '2px solid transparent',
+    }}>
+    <Icon size={18} />
     <span className="text-sm font-medium">{label}</span>
-    {active && <motion.div layoutId="active-pill" className="ml-auto"><ChevronRight size={14} /></motion.div>}
+    {active && <ChevronRight size={13} className="ml-auto" style={{ color: C.champagneDim }} />}
   </div>
 );
 
-// --- Main App ---
+const SeverityBadge = ({ s }) => {
+  const m = { Critical: 'danger', High: 'danger', Medium: 'warning', Low: 'forest' };
+  return <Badge color={m[s] || 'champagne'}>{s}</Badge>;
+};
 
+// ── Main App ───────────────────────────────────────────────────
 export default function App() {
   const [stats, setStats] = useState({
-    execs_per_sec: 0,
-    paths_total: 0,
-    crashes_unique: 0,
-    hangs_unique: 0,
-    stability: 100,
-    coverage: 0,
-    cpu_usage: 0,
-    mem_usage: 0
+    execs_per_sec: 0, paths_total: 0, crashes_unique: 0,
+    hangs_unique: 0, stability: 100, coverage: 0, cpu_usage: 0, mem_usage: 0
   });
   const [logs, setLogs] = useState([]);
   const [running, setRunning] = useState(false);
   const [chartData, setChartData] = useState([]);
   const [activeModule, setActiveModule] = useState('Dashboard');
   const [aiReport, setAiReport] = useState(null);
-  
+  const [allReports, setAllReports] = useState([]);
+  const [selectedReport, setSelectedReport] = useState(null);
+  const [latestCrash, setLatestCrash] = useState({});
+
+  const [iotFw, setIotFw] = useState(null);
+  const [iotFuzzing, setIotFuzzing] = useState(false);
+  const [iotMode, setIotMode] = useState('QEMU');
+  const [iotFileIdx, setIotFileIdx] = useState(0);
+  const [iotLogs, setIotLogs] = useState([]);
+  const [iotStats, setIotStats] = useState({ cpu: 0, mem: 0, crashes: 0 });
+  const iotTimerRef = useRef(null);
+  const [loadingIot, setLoadingIot] = useState(false);
+
   const ws = useRef(null);
-  const terminalEndRef = useRef(null);
+  const termRef = useRef(null);
 
   useEffect(() => {
-    // Initial fetch
-    fetch('http://localhost:8000/api/status')
-      .then(res => res.json())
-      .then(data => {
-        setStats(data.stats);
-        setLogs(data.logs);
-        setRunning(data.running);
-      });
-
-    // WebSocket init
-    ws.current = new WebSocket('ws://localhost:8000/ws');
-    
-    ws.current.onmessage = (event) => {
-      const msg = JSON.parse(event.data);
+    fetch('http://127.0.0.1:8000/api/status').then(r => r.json()).then(d => {
+      setStats(d.stats); setLogs(d.logs); setRunning(d.running);
+    });
+    ws.current = new WebSocket('ws://127.0.0.1:8000/ws');
+    ws.current.onmessage = (ev) => {
+      const msg = JSON.parse(ev.data);
       if (msg.type === 'init') {
-        setStats(msg.data.stats);
-        setLogs(msg.data.logs);
-        setRunning(msg.data.running);
+        setStats(msg.data.stats); setLogs(msg.data.logs); setRunning(msg.data.running);
       } else if (msg.type === 'update') {
         setStats(msg.stats);
-        if (msg.log) setLogs(prev => [...prev.slice(-49), msg.log]);
-        
-        // Update chart data
-        setChartData(prev => [
-          ...prev.slice(-19), 
-          { time: new Date().toLocaleTimeString(), val: msg.stats.execs_per_sec }
-        ]);
+        if (msg.log) setLogs(p => [...p.slice(-79), msg.log]);
+        if (msg.latest_crash) setLatestCrash(msg.latest_crash);
+        setChartData(p => [...p.slice(-19), { t: new Date().toLocaleTimeString('en',{hour12:false,hour:'2-digit',minute:'2-digit',second:'2-digit'}), v: msg.stats.execs_per_sec }]);
       }
     };
-
     return () => ws.current?.close();
   }, []);
 
-  useEffect(() => {
-    terminalEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [logs]);
+  useEffect(() => { termRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [logs]);
 
   const toggleFuzzing = () => {
-    const action = running ? 'stop' : 'start';
-    ws.current.send(JSON.stringify({ action }));
+    ws.current?.send(JSON.stringify({ action: running ? 'stop' : 'start' }));
     setRunning(!running);
   };
 
-  const runAIAnalysis = async () => {
-    const res = await fetch('http://localhost:8000/api/analyze');
-    const report = await res.json();
-    setAiReport(report);
+  const startIotFuzz = () => {
+    if (iotFuzzing) {
+      clearInterval(iotTimerRef.current);
+      setIotFuzzing(false);
+      setIotLogs(p => [...p, `[${new Date().toLocaleTimeString()}] [INFO] AEGIS-IoT: Fuzzing halted by user.`]);
+      return;
+    }
+    if (!iotFw) { alert('Please upload firmware first.'); return; }
+    setIotFuzzing(true);
+    const msgs = [
+      `[INFO] AEGIS-IoT: Starting ${iotMode} sandbox for ${iotFw.filename}`,
+      `[INFO] AEGIS-IoT: Architecture ${iotFw.architecture} detected. Loading seed corpus...`,
+      `[INFO] FUZZER: Mutating BLE packet inputs — 1024 variants generated`,
+      `[WARNING] ANOMALY: Unexpected response at entry 0x08004A2F (strcpy region)`,
+      `[CRITICAL] CRASH: Buffer overflow confirmed — strcpy in BLE handler (offset 0x4A2F)`,
+      `[INFO] FUZZER: Pivoting to RF packet simulation...`,
+      `[WARNING] ANOMALY: Heap allocation failure in malloc at 0x0800F112`,
+      `[CRITICAL] CRASH: NULL dereference after malloc failure — BLE stack panic`,
+      `[INFO] AEGIS-IoT: Coverage now at 68%. Exploring telemetry logger...`,
+      `[INFO] FUZZER: Injecting format string payloads into sprintf at 0x0800A344`,
+    ];
+    let i = 0;
+    iotTimerRef.current = setInterval(() => {
+      if (i < msgs.length) {
+        setIotLogs(p => [...p.slice(-49), `[${new Date().toLocaleTimeString()}] ${msgs[i++]}`]);
+      }
+      setIotStats({
+        cpu: Math.floor(55 + Math.random() * 35),
+        mem: Math.floor(80 + Math.random() * 120),
+        crashes: Math.floor(Math.random() * 3),
+      });
+    }, 1200);
   };
 
-  return (
-    <div className="flex h-screen bg-cyber-black text-white font-sans selection:bg-cyber-green/30">
-      {/* Sidebar */}
-      <aside className="w-64 border-r border-white/5 flex flex-col glass-panel rounded-none">
-        <div className="p-6 flex items-center gap-3">
-          <div className="w-8 h-8 bg-cyber-green rounded flex items-center justify-center text-black shadow-neon">
-            <Shield size={20} />
+  const runAIAnalysis = async () => {
+    const r = await fetch('http://127.0.0.1:8000/api/analyze');
+    setAiReport(await r.json());
+  };
+
+  const uploadFirmware = async () => {
+    setIotFw(null);
+    setLoadingIot(true);
+    setIotLogs([`[${new Date().toLocaleTimeString()}] [INFO] AEGIS-IoT: Preparing analyzer hub...`]);
+    setIotStats({ cpu: 0, mem: 0, crashes: 0 });
+    
+    try {
+      const res = await fetch(`http://127.0.0.1:8000/api/iot/analyze?file_index=${iotFileIdx}`, { method: 'POST' });
+      const data = await res.json();
+      
+      // Simulate real binary analysis time
+      await new Promise(r => setTimeout(r, 1500));
+      
+      setIotFw(data);
+      setIotLogs(p => [...p, `[${new Date().toLocaleTimeString()}] [INFO] AEGIS-IoT: Analysis complete for ${data.filename}`]);
+    } catch (e) {
+      setIotLogs(p => [...p, `[${new Date().toLocaleTimeString()}] [ERROR] AEGIS-IoT: Connection refused.`]);
+    } finally {
+      setLoadingIot(false);
+    }
+  };
+
+  const runFullSweep = async () => {
+    const r = await fetch('http://127.0.0.1:8000/api/analyze/all');
+    const data = await r.json();
+    setAllReports(data);
+    setSelectedReport(data[0]);
+  };
+
+  const logColor = (log) => {
+    if (log.includes('[CRITICAL]')) return C.danger;
+    if (log.includes('[WARNING]')) return C.warning;
+    if (log.includes('IDOR') || log.includes('CRASH')) return C.danger;
+    return 'rgba(247,231,206,0.6)';
+  };
+
+  // ── Risk color helper ──
+  const riskColor = (r) => r === 'Critical' ? C.danger : r === 'High' ? C.warning : C.champagneDim;
+
+  // ── Heatmap bar color ──
+  const heatColor = (score) => {
+    if (score >= 80) return `linear-gradient(90deg, ${C.danger}, #e74c3c)`;
+    if (score >= 55) return `linear-gradient(90deg, ${C.warning}, #f39c12)`;
+    if (score >= 30) return `linear-gradient(90deg, ${C.forestBright}, #27ae60)`;
+    return `linear-gradient(90deg, #2c3e50, #3d7a53)`;
+  };
+
+  // ── Dashboard ──
+  const Dashboard = () => (
+    <div className="space-y-6">
+      <div className="flex items-end justify-between">
+        <div>
+          <h2 className="text-2xl font-bold" style={{ color: C.champagne }}>Healthcare Command Center</h2>
+          <p className="text-sm text-white/40 mt-1">Real-time medical system fuzzing telemetry</p>
+        </div>
+        {stats.crashes_unique > 0 && (
+          <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg border"
+            style={{ background: 'rgba(192,57,43,0.15)', borderColor: 'rgba(192,57,43,0.4)', color: '#e74c3c' }}>
+            <AlertTriangle size={16} />
+            <span className="text-sm font-bold">{stats.crashes_unique} Vulnerabilities Found</span>
+          </motion.div>
+        )}
+      </div>
+
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <StatCard icon={Zap} label="Executions / sec" value={stats.execs_per_sec.toLocaleString()} accent delay={0.05} />
+        <StatCard icon={Activity} label="Paths Explored" value={stats.paths_total} delay={0.1} />
+        <StatCard icon={AlertTriangle} label="Unique Crashes" value={stats.crashes_unique} accent={stats.crashes_unique > 0} delay={0.15} />
+        <StatCard icon={HardDrive} label="Coverage" value={`${stats.coverage?.toFixed(1)}%`} delay={0.2} />
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Chart */}
+        <div className="lg:col-span-2 glass-panel forest-border p-5">
+          <div className="flex items-center gap-2 mb-4">
+            <BarChart3 size={15} style={{ color: C.champagne }} />
+            <span className="text-xs font-bold uppercase tracking-widest text-white/50">Fuzzing Throughput</span>
           </div>
-          <h1 className="font-bold tracking-tighter text-xl">AEGIS<span className="text-cyber-green">FUZZ</span></h1>
+          <div className="h-[220px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={chartData}>
+                <defs>
+                  <linearGradient id="grad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor={C.champagne} stopOpacity={0.2} />
+                    <stop offset="95%" stopColor={C.champagne} stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" vertical={false} />
+                <XAxis dataKey="t" hide />
+                <YAxis stroke="rgba(255,255,255,0.15)" fontSize={9} tickLine={false} axisLine={false} />
+                <Tooltip contentStyle={{ background: '#111a14', border: '1px solid rgba(247,231,206,0.15)', fontSize: 11, color: C.champagne }} />
+                <Area type="monotone" dataKey="v" stroke={C.champagne} strokeWidth={1.5} fill="url(#grad)" />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
         </div>
 
-        <nav className="flex-1 mt-4">
-          <SidebarItem icon={Activity} label="Dashboard" active={activeModule === 'Dashboard'} onClick={() => setActiveModule('Dashboard')} />
-          <SidebarItem icon={Play} label="Start Fuzzing" active={activeModule === 'Fuzzing'} onClick={() => setActiveModule('Fuzzing')} />
-          <SidebarItem icon={Upload} label="Upload Binary" active={activeModule === 'Upload'} />
-          <SidebarItem icon={AlertTriangle} label="Vulnerability Reports" active={activeModule === 'Reports'} onClick={() => setActiveModule('Reports')} />
-          <SidebarItem icon={Brain} label="AI Analysis" active={activeModule === 'AI'} onClick={() => setActiveModule('AI')} />
-          <SidebarItem icon={Database} label="Docker Sandbox" active={activeModule === 'Docker'} />
-          <SidebarItem icon={Settings} label="Settings" active={activeModule === 'Settings'} />
+        {/* Resource panel */}
+        <div className="glass-panel forest-border p-5 space-y-5">
+          <div className="flex items-center gap-2">
+            <Cpu size={15} style={{ color: C.forestBright }} />
+            <span className="text-xs font-bold uppercase tracking-widest text-white/50">System Resources</span>
+          </div>
+          {[
+            { label: 'CPU Usage', value: stats.cpu_usage, unit: '%', color: C.champagne },
+            { label: 'Memory Heap', value: stats.mem_usage, unit: 'MB', color: C.forestBright },
+            { label: 'Stability', value: stats.stability, unit: '%', color: C.champagneDim },
+          ].map(({ label, value, unit, color }) => (
+            <div key={label} className="space-y-1">
+              <div className="flex justify-between text-xs">
+                <span className="text-white/40">{label}</span>
+                <span className="font-mono" style={{ color }}>{value}{unit}</span>
+              </div>
+              <div className="h-1 w-full rounded-full" style={{ background: 'rgba(255,255,255,0.05)' }}>
+                <motion.div className="h-full rounded-full" style={{ background: color }}
+                  animate={{ width: `${Math.min(100, value)}%` }} transition={{ type: 'spring' }} />
+              </div>
+            </div>
+          ))}
+          <div className="pt-3 border-t border-white/5 text-[10px] space-y-1">
+            <div className="flex items-center gap-2 text-white/40">
+              <div className="w-1.5 h-1.5 rounded-full" style={{ background: running ? C.forestBright : 'rgba(255,255,255,0.2)', animation: running ? 'pulse 1.5s infinite' : 'none' }} />
+              <span>QEMU Target: pacemaker-7721</span>
+            </div>
+            <div className="text-white/30">EHR API: 127.0.0.1:8000</div>
+          </div>
+        </div>
+      </div>
+
+      {/* Terminal */}
+      <div className="glass-panel forest-border overflow-hidden">
+        <div className="flex items-center gap-2 px-4 py-2.5 border-b border-white/5" style={{ background: 'rgba(0,0,0,0.3)' }}>
+          <Terminal size={13} style={{ color: C.champagne }} />
+          <span className="text-[10px] font-mono uppercase tracking-widest text-white/40">Live Execution Stream</span>
+          <div className="ml-auto flex gap-1.5">
+            {['#c0392b40','#d4a01740','#3d7a5340'].map((c,i) => <div key={i} className="w-2 h-2 rounded-full" style={{ background: c }} />)}
+          </div>
+        </div>
+        <div className="h-56 p-3 font-mono text-[11px] overflow-y-auto terminal-scrollbar" style={{ background: 'rgba(0,0,0,0.5)' }}>
+          {logs.map((log, i) => {
+            const parts = log.match(/^(\[\d{2}:\d{2}:\d{2}\])\s(.*)$/);
+            return (
+              <div key={i} className="mb-1 flex gap-3">
+                <span className="text-white/20 shrink-0">{parts?.[1] ?? ''}</span>
+                <span style={{ color: logColor(log) }}>{parts?.[2] ?? log}</span>
+              </div>
+            );
+          })}
+          <div ref={termRef} />
+        </div>
+      </div>
+    </div>
+  );
+
+  // ── IoT Firmware Module ──
+  const IoTFirmware = () => (
+    <div className="space-y-6">
+      {/* Header */}
+      <div>
+        <h2 className="text-2xl font-bold" style={{ color: C.champagne }}>Medical IoT <span style={{ color: C.forestBright }}>Firmware Analyzer</span></h2>
+        <p className="text-sm text-white/40 mt-1">Static analysis, live fuzzing, and vulnerability heatmap for embedded medical devices</p>
+      </div>
+
+      {/* Upload + Fuzzing Control */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+        {/* Firmware Upload */}
+        <div className="glass-panel forest-border p-5 space-y-4">
+          <div className="flex items-center gap-2">
+            <Upload size={15} style={{ color: C.champagne }} />
+            <span className="text-xs font-bold uppercase tracking-widest text-white/50">Firmware Upload</span>
+          </div>
+
+          <div className="flex gap-3">
+            {[{label:'Pacemaker v3.2.1', i:0},{label:'Insulin Pump v2.0', i:1}].map(({label, i}) => (
+              <button key={i} onClick={() => setIotFileIdx(i)}
+                className="flex-1 py-2 rounded-lg text-xs font-bold border transition-all"
+                style={iotFileIdx === i
+                  ? { background: 'rgba(247,231,206,0.12)', color: C.champagne, borderColor: C.champagneDim }
+                  : { background: 'transparent', color: 'rgba(255,255,255,0.35)', borderColor: 'rgba(255,255,255,0.1)' }}>
+                {label}
+              </button>
+            ))}
+          </div>
+
+          {/* Drop zone */}
+          <button className="w-full border-2 border-dashed rounded-xl p-6 text-center transition-all cursor-pointer hover:border-champagne/40"
+            style={{ borderColor: 'rgba(247,231,206,0.15)', background: 'rgba(247,231,206,0.02)' }}
+            onClick={uploadFirmware}
+            disabled={loadingIot}>
+            {loadingIot ? (
+              <RefreshCw size={28} className="mx-auto mb-2 animate-spin" style={{ color: C.champagne }} />
+            ) : (
+              <Upload size={28} className="mx-auto mb-2" style={{ color: 'rgba(247,231,206,0.3)' }} />
+            )}
+            <p className="text-sm font-semibold" style={{ color: C.champagneDim }}>
+              {loadingIot ? 'Analyzing Binary...' : 'Click to Load Firmware'}
+            </p>
+            <p className="text-[10px] text-white/30 mt-1">
+              {iotFileIdx === 0 ? 'pacemaker_v3.2.1.bin' : 'insulin_pump_fw_2.0.bin'}
+            </p>
+          </button>
+
+          {iotFw && (
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 text-xs" style={{ color: C.forestBright }}>
+                <CheckCircle2 size={13} /> Firmware analyzed successfully
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-[11px]">
+                {[['Architecture', iotFw.architecture],['Entry Point', iotFw.entry_point],
+                  ['File Size', iotFw.file_size],['Compiler', iotFw.compiler]].map(([k,v]) => (
+                  <div key={k} className="p-2 rounded-lg" style={{ background: 'rgba(0,0,0,0.3)' }}>
+                    <p className="text-white/30 text-[9px] uppercase">{k}</p>
+                    <p className="font-mono mt-0.5" style={{ color: C.champagneDim }}>{v}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Fuzzing Control + Live Monitor */}
+        <div className="space-y-4">
+          <div className="glass-panel forest-border p-5 space-y-4">
+            <div className="flex items-center gap-2">
+              <Microchip size={15} style={{ color: C.champagne }} />
+              <span className="text-xs font-bold uppercase tracking-widest text-white/50">Fuzzing Control</span>
+            </div>
+
+            <div className="flex gap-2">
+              {['QEMU','Packet Sim'].map(m => (
+                <button key={m} onClick={() => setIotMode(m)}
+                  className="flex-1 py-2 rounded-lg text-xs font-bold border transition-all"
+                  style={iotMode === m
+                    ? { background: 'rgba(61,122,83,0.2)', color: C.forestBright, borderColor: C.forest }
+                    : { background: 'transparent', color: 'rgba(255,255,255,0.35)', borderColor: 'rgba(255,255,255,0.1)' }}>
+                  {m === 'QEMU' ? '🖥 QEMU Mode' : '📡 Packet Sim'}
+                </button>
+              ))}
+            </div>
+
+            <button onClick={startIotFuzz}
+              className="w-full py-2.5 rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition-all"
+              style={iotFuzzing
+                ? { background: 'rgba(192,57,43,0.15)', color: '#e74c3c', border: '1px solid rgba(192,57,43,0.4)' }
+                : { background: `linear-gradient(135deg, ${C.champagne}, ${C.champagneDim})`, color: '#0b0f0c' }}>
+              {iotFuzzing ? <><Square size={14}/> Stop IoT Fuzzing</> : <><Play size={14}/> Start IoT Fuzzing</>}
+            </button>
+          </div>
+
+          {/* Live Execution Monitor */}
+          {iotFw && (
+            <div className="glass-panel forest-border p-5">
+              <div className="flex items-center gap-2 mb-4">
+                <Activity size={15} style={{ color: C.champagne }} />
+                <span className="text-xs font-bold uppercase tracking-widest text-white/50">Live Execution Monitor</span>
+                {iotFuzzing && <span className="ml-auto text-[9px] font-bold px-2 py-0.5 rounded" style={{ background: 'rgba(61,122,83,0.2)', color: C.forestBright }}>ACTIVE</span>}
+              </div>
+              <div className="grid grid-cols-3 gap-3">
+                {[{label:'CPU',value:`${iotStats.cpu}%`,color:C.champagne,icon:Cpu},
+                  {label:'Memory',value:`${iotStats.mem}MB`,color:C.forestBright,icon:HardDrive},
+                  {label:'Crashes 💥',value:iotStats.crashes,color:iotStats.crashes>0?C.danger:C.champagneDim,icon:AlertTriangle}].map(({label,value,color,icon:Ic}) => (
+                  <div key={label} className="p-3 rounded-lg text-center" style={{ background: 'rgba(0,0,0,0.3)' }}>
+                    <Ic size={14} className="mx-auto mb-1" style={{ color }} />
+                    <p className="text-[9px] text-white/30 uppercase">{label}</p>
+                    <p className="font-mono font-bold text-base mt-0.5" style={{ color }}>{value}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {!iotFw && (
+            <div className="h-full flex flex-col items-center justify-center glass-panel forest-border p-8 text-center opacity-40">
+              <Shield size={32} className="mb-4" />
+              <p className="text-sm font-bold">Analysis Offline</p>
+              <p className="text-[10px] mt-1">Upload a binary to activate monitoring</p>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Memory Sections */}
+      {iotFw && (
+        <div className="glass-panel forest-border p-5">
+          <div className="flex items-center gap-2 mb-4">
+            <Database size={15} style={{ color: C.forestBright }} />
+            <span className="text-xs font-bold uppercase tracking-widest text-white/50">Memory Sections</span>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs font-mono">
+              <thead>
+                <tr className="text-white/30 text-left border-b" style={{ borderColor: 'rgba(255,255,255,0.05)' }}>
+                  {['Section','Address','Size','Flags'].map(h => <th key={h} className="pb-2 font-medium pr-6">{h}</th>)}
+                </tr>
+              </thead>
+              <tbody>
+                {iotFw.sections.map((s,i) => (
+                  <tr key={i} className="border-b" style={{ borderColor: 'rgba(255,255,255,0.03)' }}>
+                    <td className="py-1.5 pr-6" style={{ color: C.champagne }}>{s.name}</td>
+                    <td className="py-1.5 pr-6 text-white/50">{s.addr}</td>
+                    <td className="py-1.5 pr-6 text-white/50">{s.size}</td>
+                    <td className="py-1.5"><span className="px-2 py-0.5 rounded text-[9px]" style={{ background: 'rgba(61,122,83,0.15)', color: C.forestBright }}>{s.flags}</span></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Risky Functions */}
+      {iotFw && (
+        <div className="glass-panel forest-border p-5">
+          <div className="flex items-center gap-2 mb-4">
+            <AlertTriangle size={15} style={{ color: C.danger }} />
+            <span className="text-xs font-bold uppercase tracking-widest text-white/50">Risky Functions Detected</span>
+            <span className="ml-auto text-[9px] font-bold px-2 py-0.5 rounded" style={{ background: 'rgba(192,57,43,0.15)', color: C.danger }}>{iotFw.risky_functions.length} FOUND</span>
+          </div>
+          <div className="space-y-2">
+            {iotFw.risky_functions.map((fn, i) => (
+              <motion.div key={i} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.05 }}
+                className="flex items-start gap-3 p-3 rounded-lg" style={{ background: 'rgba(0,0,0,0.25)' }}>
+                <span className="font-mono font-bold text-sm" style={{ color: riskColor(fn.risk), minWidth: 80 }}>{fn.name}()</span>
+                <span className="font-mono text-[10px] text-white/30" style={{ minWidth: 110 }}>{fn.addr}</span>
+                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded border shrink-0"
+                  style={{ color: riskColor(fn.risk), borderColor: `${riskColor(fn.risk)}40`, background: `${riskColor(fn.risk)}10` }}>
+                  {fn.risk}
+                </span>
+                <span className="text-xs text-white/50 leading-relaxed">{fn.detail}</span>
+              </motion.div>
+            ))}
+          </div>
+
+          {/* Suspicious Strings */}
+          <div className="mt-4 pt-4 border-t" style={{ borderColor: 'rgba(255,255,255,0.05)' }}>
+            <p className="text-[10px] text-white/30 uppercase mb-2">Strings of Interest</p>
+            <div className="flex flex-wrap gap-2">
+              {iotFw.strings_of_interest.map(s => (
+                <span key={s} className="font-mono text-[11px] px-2 py-0.5 rounded"
+                  style={{ background: 'rgba(192,57,43,0.12)', color: '#e8a598', border: '1px solid rgba(192,57,43,0.25)' }}>
+                  "{s}"
+                </span>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 🔥 Vulnerability Heatmap */}
+      {iotFw && (
+        <div className="glass-panel forest-border p-5">
+          <div className="flex items-center gap-2 mb-5">
+            <Flame size={15} style={{ color: C.danger }} />
+            <span className="text-xs font-bold uppercase tracking-widest text-white/50">Vulnerability Heatmap</span>
+            <span className="text-[10px] text-white/30 ml-auto">Score = exposure risk (0–100)</span>
+          </div>
+          <div className="space-y-3">
+            {iotFw.heatmap.map((h, i) => (
+              <motion.div key={i} initial={{ opacity: 0, scaleX: 0 }} animate={{ opacity: 1, scaleX: 1 }}
+                transition={{ delay: i * 0.06 }} style={{ originX: 0 }}>
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs font-medium text-white/70">{h.module}</span>
+                  <div className="flex items-center gap-3">
+                    {h.crashes > 0 && <span className="text-[10px] font-bold" style={{ color: C.danger }}>💥 {h.crashes} crashes</span>}
+                    <span className="font-mono text-xs font-bold" style={{ color: h.score >= 80 ? C.danger : h.score >= 55 ? C.warning : C.champagneDim }}>
+                      {h.score}/100
+                    </span>
+                  </div>
+                </div>
+                <div className="h-5 w-full rounded-lg overflow-hidden relative" style={{ background: 'rgba(255,255,255,0.04)' }}>
+                  <motion.div className="h-full rounded-lg relative"
+                    style={{ background: heatColor(h.score), width: `${h.score}%` }}
+                    initial={{ width: 0 }} animate={{ width: `${h.score}%` }}
+                    transition={{ delay: i * 0.06 + 0.2, duration: 0.8, ease: 'easeOut' }}>
+                    <div className="absolute inset-0 opacity-30" style={{ backgroundImage: 'repeating-linear-gradient(90deg, transparent, transparent 8px, rgba(255,255,255,0.08) 8px, rgba(255,255,255,0.08) 9px)' }} />
+                  </motion.div>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+
+          {/* Heatmap Legend */}
+          <div className="flex gap-5 mt-5 pt-4 border-t text-[10px]" style={{ borderColor: 'rgba(255,255,255,0.05)' }}>
+            {[{color:C.danger,label:'Critical (80–100)'},
+              {color:C.warning,label:'High (55–79)'},
+              {color:C.forestBright,label:'Medium (30–54)'},
+              {color:'#3d4f44',label:'Low (0–29)'}].map(({color,label}) => (
+              <div key={label} className="flex items-center gap-1.5">
+                <div className="w-3 h-3 rounded-sm" style={{ background: color }} />
+                <span className="text-white/40">{label}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Live IoT Execution Stream */}
+      {iotFw && (
+        <div className="glass-panel forest-border overflow-hidden">
+          <div className="flex items-center gap-2 px-4 py-2.5 border-b" style={{ background: 'rgba(0,0,0,0.3)', borderColor: 'rgba(255,255,255,0.05)' }}>
+            <Terminal size={13} style={{ color: C.champagne }} />
+            <span className="text-[10px] font-mono uppercase tracking-widest text-white/40">IoT Execution Stream</span>
+          </div>
+          <div className="h-48 p-3 font-mono text-[11px] overflow-y-auto terminal-scrollbar" style={{ background: 'rgba(0,0,0,0.5)' }}>
+            {iotLogs.length === 0 && <p className="text-white/20">Start fuzzing to see live output...</p>}
+            {iotLogs.map((log, i) => {
+              const col = log.includes('[CRITICAL]') ? C.danger : log.includes('[WARNING]') ? C.warning : 'rgba(247,231,206,0.6)';
+              return <div key={i} className="mb-1" style={{ color: col }}>{log}</div>;
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
+  // ── AI Analysis ──
+  const AIAnalysis = () => (
+    <div className="space-y-6">
+      <div className="flex items-end justify-between flex-wrap gap-4">
+        <div>
+          <h2 className="text-2xl font-bold" style={{ color: C.champagne }}>NeuroFuzz <span style={{ color: C.forestBright }}>AI Analyzer</span></h2>
+          <p className="text-sm text-white/40 mt-1">Neural classification of medical software vulnerabilities with exploitation guidance</p>
+        </div>
+        <div className="flex gap-3">
+          <button onClick={runAIAnalysis}
+            className="px-5 py-2.5 rounded-lg text-sm font-bold transition-all"
+            style={{ background: 'rgba(247,231,206,0.1)', color: C.champagne, border: `1px solid rgba(247,231,206,0.3)` }}>
+            Analyze Latest Crash
+          </button>
+          <button onClick={runFullSweep}
+            className="px-5 py-2.5 rounded-lg text-sm font-bold transition-all champagne-glow-btn">
+            Full AI Sweep
+          </button>
+        </div>
+      </div>
+
+      {/* Single report view */}
+      {aiReport && !allReports.length && <ReportCard report={aiReport} />}
+
+      {/* Full sweep list */}
+      {allReports.length > 0 && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="space-y-2">
+            {allReports.map((r, i) => (
+              <div key={i} onClick={() => setSelectedReport(r)} className="glass-panel forest-border p-3 cursor-pointer transition-all"
+                style={{ borderColor: selectedReport?.id === r.id ? C.champagne : undefined }}>
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs font-mono" style={{ color: C.champagneDim }}>{r.id}</span>
+                  <SeverityBadge s={r.severity} />
+                </div>
+                <p className="text-sm font-semibold text-white/80">{r.type}</p>
+                <p className="text-[10px] text-white/40 mt-1">{r.target}</p>
+              </div>
+            ))}
+          </div>
+          <div className="lg:col-span-2">
+            {selectedReport && <ReportCard report={selectedReport} />}
+          </div>
+        </div>
+      )}
+
+      {!aiReport && !allReports.length && (
+        <div className="h-72 glass-panel forest-border flex flex-col items-center justify-center text-center p-10">
+          <Brain size={40} style={{ color: 'rgba(247,231,206,0.2)' }} className="mb-4" />
+          <h3 className="text-lg font-bold mb-2">No Analysis Yet</h3>
+          <p className="text-sm text-white/40 max-w-xs">Start a fuzzing session to discover vulnerabilities, then trigger the AI Deep Scan to get detailed exploitation reports.</p>
+        </div>
+      )}
+    </div>
+  );
+
+  const ReportCard = ({ report }) => (
+    <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
+      {/* Header */}
+      <div className="glass-panel forest-border p-5">
+        <div className="flex items-start justify-between flex-wrap gap-3 mb-4">
+          <div>
+            <span className="text-[10px] font-mono text-white/30">{report.id} • {report.timestamp}</span>
+            <h3 className="text-xl font-bold mt-1" style={{ color: C.champagne }}>{report.type}</h3>
+            <p className="text-xs text-white/40 mt-1 font-mono">{report.cwe} — Target: {report.target}</p>
+          </div>
+          <div className="flex gap-2 flex-wrap">
+            <SeverityBadge s={report.severity} />
+            <Badge color="warning">Exploitability: {report.exploitability}</Badge>
+          </div>
+        </div>
+        <div className="p-4 rounded-lg" style={{ background: 'rgba(0,0,0,0.3)', borderLeft: `3px solid ${C.champagne}` }}>
+          <p className="text-[10px] text-white/40 uppercase mb-1.5">Root Cause</p>
+          <p className="text-sm leading-relaxed text-white/80">{report.root_cause}</p>
+        </div>
+      </div>
+
+      {/* Payload */}
+      <div className="glass-panel forest-border p-5">
+        <div className="flex items-center gap-2 mb-3">
+          <Code2 size={15} style={{ color: C.danger }} />
+          <span className="text-xs font-bold uppercase tracking-widest" style={{ color: C.danger }}>Exploitation Payload — What to Input</span>
+        </div>
+        <p className="text-sm text-white/60 mb-3">{report.exploitation_explanation}</p>
+        <div className="p-4 rounded-lg font-mono text-xs overflow-x-auto" style={{ background: '#060a07', border: '1px solid rgba(192,57,43,0.3)', color: '#e8a598', lineHeight: 1.7 }}>
+          <pre className="whitespace-pre-wrap">{report.exploitation_payload}</pre>
+        </div>
+      </div>
+
+      {/* Compliance & Safety */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="glass-panel forest-border p-4">
+          <div className="flex items-center gap-2 mb-2">
+            <FileText size={14} style={{ color: C.champagne }} />
+            <span className="text-[10px] font-bold uppercase tracking-widest text-white/50">Compliance Impact</span>
+          </div>
+          <p className="text-sm font-semibold" style={{ color: C.warning }}>{report.compliance_impact}</p>
+        </div>
+        <div className="p-4 rounded-xl" style={{ background: 'rgba(192,57,43,0.1)', border: '1px solid rgba(192,57,43,0.3)' }}>
+          <div className="flex items-center gap-2 mb-2">
+            <HeartPulse size={14} style={{ color: C.danger }} />
+            <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color: C.danger }}>Patient Safety Risk</span>
+          </div>
+          <p className="text-sm font-bold text-white/90">{report.patient_safety}</p>
+        </div>
+      </div>
+
+      {/* Remediation */}
+      <div className="glass-panel p-4" style={{ borderLeft: `3px solid ${C.forestBright}` }}>
+        <div className="flex items-center gap-2 mb-2">
+          <Lock size={14} style={{ color: C.forestBright }} />
+          <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color: C.forestBright }}>Remediation Strategy</span>
+        </div>
+        <p className="text-sm text-white/70 leading-relaxed">{report.recommendation}</p>
+      </div>
+    </motion.div>
+  );
+
+  // ── Main Render ──
+  return (
+    <div className="flex h-screen font-sans overflow-hidden" style={{ background: '#0b0f0c', color: '#fdf3e4' }}>
+
+      {/* Sidebar */}
+      <aside className="w-60 flex flex-col border-r" style={{ background: '#0e1610', borderColor: 'rgba(247,231,206,0.06)' }}>
+        <div className="p-5 flex items-center gap-3">
+          <div className="w-8 h-8 rounded-lg flex items-center justify-center"
+            style={{ background: `linear-gradient(135deg, ${C.forest}, ${C.champagneDim})` }}>
+            <Shield size={17} style={{ color: '#0b0f0c' }} />
+          </div>
+          <h1 className="font-bold tracking-tight text-lg" style={{ color: C.champagne }}>
+            AEGIS<span style={{ color: C.forestBright }}>FUZZ</span>
+          </h1>
+        </div>
+
+        <nav className="flex-1 mt-2">
+          {[
+            { icon: Activity,       label: 'Healthcare Command', id: 'Dashboard' },
+            { icon: Upload,         label: 'Medical IoT Firmware',id: 'IoT' },
+            { icon: Database,       label: 'DICOM/HL7 Protocols', id: 'DICOM' },
+            { icon: HeartPulse,     label: 'EHR API Defense',    id: 'EHR' },
+            { icon: Brain,          label: 'NeuroFuzz AI',        id: 'AI' },
+            { icon: Sparkles,       label: 'AI Remediation',      id: 'Remediation' },
+            { icon: FileText,       label: 'Compliance Reports',  id: 'Reports' },
+            { icon: Settings,       label: 'Settings',            id: 'Settings' },
+          ].map(({ icon, label, id }) => (
+            <SidebarItem key={id} icon={icon} label={label}
+              active={activeModule === id}
+              onClick={() => setActiveModule(id)} />
+          ))}
         </nav>
 
-        <div className="p-4 border-t border-white/5">
-          <div className="flex items-center gap-3 p-3 rounded-lg bg-white/5">
-            <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-cyber-green to-cyber-blue flex items-center justify-center font-bold text-xs">AD</div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium truncate">Admin_User</p>
-              <p className="text-[10px] text-white/40 truncate">System Overseer</p>
+        <div className="p-4 border-t" style={{ borderColor: 'rgba(247,231,206,0.06)' }}>
+          <div className="flex items-center gap-3 p-3 rounded-lg" style={{ background: 'rgba(247,231,206,0.04)' }}>
+            <div className="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold"
+              style={{ background: `linear-gradient(135deg, ${C.forest}, ${C.champagneDim})`, color: '#0b0f0c' }}>
+              AD
+            </div>
+            <div>
+              <p className="text-sm font-semibold" style={{ color: C.champagne }}>Admin User</p>
+              <p className="text-[10px] text-white/30">Security Analyst</p>
             </div>
           </div>
         </div>
       </aside>
 
-      {/* Main Content */}
-      <main className="flex-1 flex flex-col overflow-hidden relative">
+      {/* Main */}
+      <main className="flex-1 flex flex-col overflow-hidden">
         {/* Header */}
-        <header className="h-16 border-b border-white/5 flex items-center justify-between px-8 bg-cyber-black/50 backdrop-blur-md z-10">
-          <div className="flex items-center gap-4 flex-1">
-            <div className="relative w-96 group">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-white/20 group-hover:text-cyber-green transition-colors" size={16} />
-              <input 
-                type="text" 
-                placeholder="Search sessions, binaries, or vulnerabilities..." 
-                className="w-full bg-white/5 border border-white/10 rounded-full py-2 pl-10 pr-4 text-sm focus:outline-none focus:border-cyber-green/50 transition-all"
-              />
-            </div>
+        <header className="h-14 flex items-center justify-between px-7 border-b" style={{ borderColor: 'rgba(247,231,206,0.06)', background: 'rgba(14,22,16,0.7)', backdropFilter: 'blur(12px)' }}>
+          <div className="relative w-80">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/20" />
+            <input type="text" placeholder="Search patients, vulnerabilities, endpoints..."
+              className="w-full bg-white/5 border border-white/8 rounded-full py-1.5 pl-9 pr-4 text-sm text-white/70 focus:outline-none"
+              style={{ borderColor: 'rgba(247,231,206,0.1)' }} />
           </div>
-
-          <div className="flex items-center gap-6">
+          <div className="flex items-center gap-5">
             <div className="flex items-center gap-2">
-              <div className={`w-2 h-2 rounded-full ${running ? 'bg-cyber-green animate-pulse' : 'bg-white/20'}`} />
-              <span className="text-[10px] font-mono text-white/50">{running ? 'SYSTEM_ONLINE' : 'SYSTEM_IDLE'}</span>
+              <div className="w-2 h-2 rounded-full" style={{
+                background: running ? C.forestBright : 'rgba(255,255,255,0.2)',
+                boxShadow: running ? `0 0 8px ${C.forestBright}` : 'none',
+                animation: running ? 'pulse 1.5s infinite' : 'none'
+              }} />
+              <span className="text-[10px] font-mono text-white/40">{running ? 'SCANNING' : 'IDLE'}</span>
             </div>
-            <button className="text-white/50 hover:text-white transition-colors relative">
-              <Bell size={20} />
-              <span className="absolute -top-1 -right-1 w-2 h-2 bg-cyber-red rounded-full" />
+            <button className="relative text-white/30 hover:text-white/60 transition-colors">
+              <Bell size={18} />
+              {stats.crashes_unique > 0 && <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full" style={{ background: C.danger }} />}
             </button>
-            <button 
-              onClick={toggleFuzzing}
-              className={`flex items-center gap-2 px-6 py-2 rounded-full font-bold text-sm transition-all duration-300
-                ${running 
-                  ? 'bg-cyber-red/10 text-cyber-red border border-cyber-red/50 hover:bg-cyber-red hover:text-white' 
-                  : 'bg-cyber-green text-black hover:shadow-neon-strong active:scale-95'}`}
-            >
-              {running ? <><Square size={16} /> Stop Session</> : <><Play size={16} /> Start Fuzzing</>}
+            <button onClick={toggleFuzzing} className="flex items-center gap-2 px-5 py-2 rounded-full text-sm font-bold transition-all"
+              style={running
+                ? { background: 'rgba(192,57,43,0.15)', color: '#e74c3c', border: '1px solid rgba(192,57,43,0.4)' }
+                : { background: `linear-gradient(135deg, ${C.champagne}, ${C.champagneDim})`, color: '#0b0f0c' }}>
+              {running ? <><Square size={14} /> Stop Session</> : <><Play size={14} /> Start Fuzzing</>}
             </button>
           </div>
         </header>
 
-        {/* Dashboard Grid */}
-        <div className="flex-1 overflow-y-auto p-8 space-y-8 custom-scrollbar">
-          {activeModule === 'Dashboard' && (
-            <>
-              {/* Stats Grid */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                <StatCard icon={Zap} label="Executions / Sec" value={stats.execs_per_sec.toLocaleString()} color="cyber-green" delay={0.1} />
-                <StatCard icon={Globe} label="Unique Paths" value={stats.paths_total} color="white" delay={0.2} />
-                <StatCard icon={AlertTriangle} label="Unique Crashes" value={stats.crashes_unique} color={stats.crashes_unique > 0 ? 'cyber-red' : 'white'} delay={0.3} />
-                <StatCard icon={Activity} label="Stability" value={`${stats.stability}%`} color="white" delay={0.4} />
-              </div>
-
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {/* Main Graph */}
-                <div className="lg:col-span-2 glass-panel p-6 hacker-border flex flex-col">
-                  <div className="flex justify-between items-center mb-6">
-                    <h3 className="text-sm font-bold flex items-center gap-2 uppercase tracking-widest text-white/70">
-                      <BarChart3 size={16} className="text-cyber-green" /> 
-                      Throughput Analysis
-                    </h3>
-                    <div className="flex gap-2">
-                      <span className="px-2 py-1 rounded bg-cyber-green/10 text-[10px] text-cyber-green">REAL_TIME</span>
-                    </div>
-                  </div>
-                  <div className="h-[300px] w-full">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <AreaChart data={chartData}>
-                        <defs>
-                          <linearGradient id="colorVal" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="#00ff41" stopOpacity={0.3}/>
-                            <stop offset="95%" stopColor="#00ff41" stopOpacity={0}/>
-                          </linearGradient>
-                        </defs>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#ffffff05" vertical={false} />
-                        <XAxis dataKey="time" hide />
-                        <YAxis stroke="#ffffff20" fontSize={10} tickLine={false} axisLine={false} />
-                        <Tooltip 
-                          contentStyle={{ backgroundColor: '#0a0a0c', border: '1px solid #ffffff10', fontSize: '10px' }}
-                          itemStyle={{ color: '#00ff41' }}
-                        />
-                        <Area type="monotone" dataKey="val" stroke="#00ff41" fillOpacity={1} fill="url(#colorVal)" />
-                      </AreaChart>
-                    </ResponsiveContainer>
-                  </div>
-                </div>
-
-                {/* Resource Usage */}
-                <div className="glass-panel p-6 hacker-border space-y-6">
-                  <h3 className="text-sm font-bold uppercase tracking-widest text-white/70 flex items-center gap-2">
-                    <Cpu size={16} className="text-cyber-blue" /> System Resources
-                  </h3>
-                  <div className="space-y-4">
-                    <div className="space-y-2">
-                      <div className="flex justify-between text-xs">
-                        <span className="text-white/50">CPU Usage</span>
-                        <span className="font-mono text-cyber-blue">{stats.cpu_usage}%</span>
-                      </div>
-                      <div className="h-1 w-full bg-white/5 rounded-full overflow-hidden">
-                        <motion.div 
-                          className="h-full bg-cyber-blue"
-                          initial={{ width: 0 }}
-                          animate={{ width: `${stats.cpu_usage}%` }}
-                        />
-                      </div>
-                    </div>
-                    <div className="space-y-2">
-                      <div className="flex justify-between text-xs">
-                        <span className="text-white/50">Memory Heap</span>
-                        <span className="font-mono text-cyber-green">{stats.mem_usage}MB</span>
-                      </div>
-                      <div className="h-1 w-full bg-white/5 rounded-full overflow-hidden">
-                        <motion.div 
-                          className="h-full bg-cyber-green"
-                          initial={{ width: 0 }}
-                          animate={{ width: `${(stats.mem_usage / 512) * 100}%` }}
-                        />
-                      </div>
-                    </div>
-                  </div>
-                  <div className="pt-4 border-t border-white/5">
-                    <div className="flex items-center gap-3 p-3 rounded-lg bg-cyber-blue/5 border border-cyber-blue/20">
-                      <HardDrive size={16} className="text-cyber-blue" />
-                      <div className="text-[10px]">
-                        <p className="text-white/70 font-bold uppercase">Docker Isolation Active</p>
-                        <p className="text-white/40">Container: afl-instance-main</p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Terminal View */}
-              <div className="glass-panel overflow-hidden hacker-border flex flex-col">
-                <div className="bg-white/5 px-4 py-2 flex items-center justify-between border-b border-white/5">
-                  <div className="flex items-center gap-2">
-                    <Terminal size={14} className="text-cyber-green" />
-                    <span className="text-[10px] font-mono text-white/50 uppercase tracking-widest">Live Execution Stream</span>
-                  </div>
-                  <div className="flex gap-1">
-                    <div className="w-2 h-2 rounded-full bg-cyber-red/20" />
-                    <div className="w-2 h-2 rounded-full bg-cyber-blue/20" />
-                    <div className="w-2 h-2 rounded-full bg-cyber-green/20" />
-                  </div>
-                </div>
-                <div className="h-64 p-4 font-mono text-xs overflow-y-auto terminal-scrollbar bg-black/40">
-                  {logs.map((log, i) => (
-                    <div key={i} className="mb-1 flex gap-4">
-                      <span className="text-white/20 whitespace-nowrap">{log.split(']')[0] + ']'}</span>
-                      <span className={`
-                        ${log.includes('CRITICAL') ? 'text-cyber-red' : ''}
-                        ${log.includes('New path') ? 'text-cyber-green' : ''}
-                        ${log.includes('WARNING') ? 'text-yellow-500' : ''}
-                        text-white/80
-                      `}>
-                        {log.split(']')[1]}
-                      </span>
-                    </div>
-                  ))}
-                  <div ref={terminalEndRef} />
-                </div>
-              </div>
-            </>
-          )}
-
-          {activeModule === 'AI' && (
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              className="space-y-8"
-            >
-              <div className="flex justify-between items-end">
-                <div>
-                  <h2 className="text-3xl font-bold tracking-tighter">NeuroFuzz <span className="text-cyber-green">AI Analyzer</span></h2>
-                  <p className="text-white/40 text-sm">Advanced neural classification of memory corruption patterns.</p>
-                </div>
-                <button 
-                  onClick={runAIAnalysis}
-                  className="px-8 py-3 bg-white text-black font-bold rounded-lg hover:bg-cyber-green transition-all"
-                >
-                  Trigger AI Deep Scan
-                </button>
-              </div>
-
-              {aiReport ? (
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                  <div className="glass-panel p-8 hacker-border space-y-6">
-                    <div className="flex justify-between items-start">
-                      <div className="px-3 py-1 rounded bg-cyber-red/10 border border-cyber-red/30 text-cyber-red text-[10px] font-bold">
-                        {aiReport.severity.toUpperCase()} SEVERITY
-                      </div>
-                      <div className="text-white/30 font-mono text-xs">{aiReport.id}</div>
-                    </div>
-                    <div>
-                      <h3 className="text-4xl font-bold text-cyber-green">{aiReport.type}</h3>
-                      <p className="text-white/50 mt-2 font-mono">{aiReport.cwe}</p>
-                    </div>
-                    <div className="p-4 bg-white/5 rounded-lg border-l-4 border-cyber-green">
-                      <p className="text-xs text-white/40 uppercase mb-1">Root Cause Analysis</p>
-                      <p className="text-sm leading-relaxed">{aiReport.root_cause}</p>
-                    </div>
-                  </div>
-                  
-                  <div className="space-y-6">
-                    <div className="glass-panel p-6 hacker-border">
-                      <h4 className="text-sm font-bold uppercase tracking-widest mb-4">Remediation Strategy</h4>
-                      <p className="text-sm text-white/70 leading-relaxed italic">
-                        "{aiReport.recommendation}"
-                      </p>
-                    </div>
-                    <div className="grid grid-cols-2 gap-6">
-                      <div className="glass-panel p-6 hacker-border text-center">
-                        <p className="text-[10px] text-white/40 uppercase mb-1">Exploitability</p>
-                        <p className="text-xl font-bold text-cyber-blue">{aiReport.exploitability}</p>
-                      </div>
-                      <div className="glass-panel p-6 hacker-border text-center">
-                        <p className="text-[10px] text-white/40 uppercase mb-1">Risk Factor</p>
-                        <p className="text-xl font-bold text-cyber-red">9.8/10</p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <div className="h-[400px] glass-panel hacker-border flex flex-col items-center justify-center text-center p-12">
-                  <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center mb-4 text-white/20">
-                    <Brain size={32} />
-                  </div>
-                  <h3 className="text-xl font-bold mb-2">No Crash Data Selected</h3>
-                  <p className="text-white/40 max-w-xs text-sm">Initiate a fuzzing session and wait for a crash event to trigger the AI-powered vulnerability analysis engine.</p>
+        {/* Content */}
+        <div className="flex-1 overflow-y-auto p-7 custom-scrollbar">
+          <AnimatePresence mode="wait">
+            <motion.div key={activeModule} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+              {activeModule === 'Dashboard' && <Dashboard />}
+              {activeModule === 'IoT' && <IoTFirmware />}
+              {activeModule === 'DICOM' && <DicomModule />}
+              {activeModule === 'EHR' && <EhrModule />}
+              {activeModule === 'AI' && <NeuroFuzzModule />}
+              {activeModule === 'Remediation' && <AiRemediationModule />}
+              {activeModule === 'Reports' && <ComplianceModule />}
+              {activeModule === 'Settings' && <SettingsModule />}
+              {!['Dashboard','IoT','DICOM','EHR','AI','Reports','Remediation','Settings'].includes(activeModule) && (
+                <div className="h-80 flex flex-col items-center justify-center text-center">
+                  <Shield size={40} className="mb-4" style={{ color: 'rgba(247,231,206,0.15)' }} />
+                  <h3 className="text-lg font-bold mb-2" style={{ color: C.champagne }}>{activeModule} Module</h3>
+                  <p className="text-sm text-white/40">This module is under development. Start from Healthcare Command to begin fuzzing.</p>
                 </div>
               )}
             </motion.div>
-          )}
+          </AnimatePresence>
         </div>
       </main>
     </div>
