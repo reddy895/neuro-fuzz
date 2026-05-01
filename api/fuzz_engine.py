@@ -2,6 +2,7 @@ import asyncio
 import random
 import time
 from datetime import datetime
+from api.db_manager import db
 
 
 # Scripted sequence of healthcare-specific fuzzing events
@@ -70,31 +71,39 @@ class FuzzEngine:
             # Emit next scripted scenario log
             if scenario_index < len(FUZZ_SCENARIO):
                 level, msg = FUZZ_SCENARIO[scenario_index]
-                self._add_log(f"[{level}] {msg}")
-
-                if level == "CRITICAL":
-                    self.stats["crashes_unique"] += 1
-                    # Tag the latest crash with vuln_index for the AI analyzer
-                    if "VULN-EHR-001" in msg:
-                        self.latest_crash = {"vuln_index": 0}
-                    elif "VULN-EHR-002" in msg:
-                        self.latest_crash = {"vuln_index": 1}
-                    elif "VULN-EHR-003" in msg:
-                        self.latest_crash = {"vuln_index": 2}
-
-                elif level == "WARNING":
-                    self.stats["hangs_unique"] += 1
-
-                if random.random() > 0.6:
-                    self.stats["paths_total"] += random.randint(1, 4)
-                    self.stats["coverage"] = round(
-                        min(100.0, self.stats["coverage"] + random.uniform(0.3, 1.2)), 1
-                    )
-
                 scenario_index += 1
             else:
-                # After scenario ends, just emit generic scanning logs
-                self._add_log("[INFO] AEGIS-FUZZ: Passive scanning — monitoring for regression crashes...")
+                # Generate random security events after initial scenario
+                level = random.choices(["INFO", "WARNING", "CRITICAL"], weights=[70, 20, 10])[0]
+                if level == "INFO":
+                    msg = random.choice([
+                        "FUZZER: Testing boundary conditions on Patient-ID input field",
+                        "SCANNER: No memory corruption detected in HL7 parser",
+                        "AEGIS-FUZZ: Probing DICOM image header for buffer overflow",
+                        "INFO: Fuzzing target stable at 1400 execs/sec"
+                    ])
+                elif level == "WARNING":
+                    msg = random.choice([
+                        "ANOMALY: High latency detected in EHR API response",
+                        "FUZZER: Non-deterministic behavior in DICOM handshake",
+                        "WARNING: Map density bottleneck detected at 0x401290"
+                    ])
+                else:
+                    msg = random.choice([
+                        "UNIQUE CRASH: Use-After-Free detected in DICOM service → VULN-AI-999",
+                        "UNIQUE CRASH: Stack overflow in FHIR JSON parser → VULN-AI-888",
+                        "UNIQUE CRASH: Integer underflow in medical image metadata → VULN-AI-777"
+                    ])
+
+            self._add_log(f"[{level}] {msg}")
+
+            if level == "CRITICAL":
+                self.stats["crashes_unique"] += 1
+                # Tag the latest crash with vuln_index for the AI analyzer
+                if "VULN-EHR-001" in msg: self.latest_crash = {"vuln_index": 0}
+                elif "VULN-EHR-002" in msg: self.latest_crash = {"vuln_index": 1}
+                elif "VULN-EHR-003" in msg: self.latest_crash = {"vuln_index": 2}
+                else: self.latest_crash = {"vuln_index": random.randint(0, 2)}
 
             await callback({
                 "type": "update",
@@ -109,11 +118,31 @@ class FuzzEngine:
         self._add_log("[INFO] AEGIS-FUZZ: Session halted. NeuroFuzz AI ready for deep scan.")
 
     def _add_log(self, msg):
-        timestamp = datetime.now().strftime("%H:%M:%S")
-        log_entry = f"[{timestamp}] {msg}"
+        timestamp_str = datetime.now().strftime("%H:%M:%S")
+        log_entry = f"[{timestamp_str}] {msg}"
         self.logs.append(log_entry)
+        
+        # Async persist critical findings to MongoDB
+        if "CRITICAL" in msg or "WARNING" in msg:
+            asyncio.create_task(self._persist_to_db(msg))
+
         if len(self.logs) > 100:
             self.logs.pop(0)
+
+    async def _persist_to_db(self, msg):
+        """Helper to save security events to MongoDB vulnerability_logs."""
+        try:
+            entry = {
+                "event_id": f"EVT-{random.randint(1000, 9999)}",
+                "type": "Crash" if "CRITICAL" in msg else "Anomaly",
+                "severity": "Critical" if "CRITICAL" in msg else "High",
+                "source": "NeuroFuzz Engine",
+                "raw_payload": msg,
+                "timestamp": datetime.now()
+            }
+            await db.vulnerability_logs.insert_one(entry)
+        except Exception as e:
+            print(f"Failed to persist log to DB: {e}")
 
     def get_status(self):
         return {

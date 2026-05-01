@@ -5,3 +5,5 @@ pydantic
 python-multipart
 docker
 openai
+motor
+python-dotenv

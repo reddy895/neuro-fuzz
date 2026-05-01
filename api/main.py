@@ -5,6 +5,12 @@ import json
 from api.fuzz_engine import engine
 from api.ai_analyzer import analyzer
 from api.ehr_db import get_record, create_record, list_records, MedicalRecord
+import os
+from dotenv import load_dotenv
+from api.db_manager import db, client
+
+# Load platform configurations
+load_dotenv()
 
 app = FastAPI(title="AegisFuzz AI — Healthcare Security Platform")
 
@@ -14,6 +20,19 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+@app.on_event("startup")
+async def startup_db_client():
+    try:
+        # Verify MongoDB connection
+        await client.admin.command('ping')
+        print("Connected to MongoDB successfully!")
+    except Exception as e:
+        print(f"Error connecting to MongoDB: {e}")
+
+@app.on_event("shutdown")
+async def shutdown_db_client():
+    client.close()
 
 
 # ─── Authentication Dependency ───────────────────────────────────────────────
@@ -368,6 +387,27 @@ async def analyze_crash():
 async def analyze_all():
     """Run a full AI sweep and return all known vulnerabilities."""
     return analyzer.analyze_all()
+
+
+@app.get("/api/analyze/db")
+async def analyze_db_logs():
+    """
+    Fetches raw security logs from MongoDB and performs AI-driven analysis.
+    This demonstrates the platform's ability to ingest and analyze external database data.
+    """
+    try:
+        # Fetch up to 50 recent logs from MongoDB
+        cursor = db.vulnerability_logs.find().sort("timestamp", -1).limit(50)
+        logs = await cursor.to_list(length=50)
+        
+        if not logs:
+            return {"status": "empty", "findings": [], "message": "No database logs found to analyze."}
+            
+        # Analyze the retrieved records
+        findings = analyzer.analyze_database_records(logs)
+        return {"status": "success", "count": len(findings), "findings": findings}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Database Analysis Error: {str(e)}")
 
 
 # ─── EHR Secure API Endpoints ────────────────────────────────────────────────

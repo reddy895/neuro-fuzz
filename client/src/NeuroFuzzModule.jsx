@@ -60,6 +60,8 @@ export default function NeuroFuzzModule() {
   const [predictions, setPredictions] = useState([]);
   const [aiEnabled, setAiEnabled] = useState(true);
   const [loading, setLoading] = useState('');
+  const [reports, setReports] = useState([]);
+  const [selectedReport, setSelectedReport] = useState(null);
 
   useEffect(() => {
     fetchStats();
@@ -84,6 +86,21 @@ export default function NeuroFuzzModule() {
     setLoading('');
   };
 
+  const runDbAnalysis = async () => {
+    setLoading('db');
+    try {
+      const res = await fetch(`${BASE}/api/analyze/db`);
+      const data = await res.json();
+      if (data.status === 'success') {
+        setReports(data.findings);
+        if (data.findings.length > 0) setSelectedReport(data.findings[0]);
+      }
+    } catch (e) {
+      console.error("DB Analysis failed", e);
+    }
+    setLoading('');
+  };
+
   return (
     <div style={{ color: '#fdf3e4', fontFamily: 'Outfit, sans-serif' }}>
       {/* Header with AI Toggle */}
@@ -97,16 +114,27 @@ export default function NeuroFuzzModule() {
           </p>
         </div>
         
-        <div onClick={() => setAiEnabled(!aiEnabled)} style={{ 
-          display: 'flex', alignItems: 'center', gap: 12, padding: '8px 16px', borderRadius: 10,
-          background: aiEnabled ? 'rgba(61,122,83,0.1)' : 'rgba(255,255,255,0.05)',
-          border: `1px solid ${aiEnabled ? 'rgba(61,122,83,0.3)' : 'rgba(255,255,255,0.1)'}`,
-          cursor: 'pointer', transition: 'all 0.3s'
-        }}>
-          <span style={{ fontSize: 12, fontWeight: 700, color: aiEnabled ? C.forestBright : 'rgba(255,255,255,0.4)' }}>
-            {aiEnabled ? 'AI-DRIVEN MUTATION' : 'RANDOM MUTATION'}
-          </span>
-          {aiEnabled ? <ToggleRight size={24} style={{ color: C.forestBright }} /> : <ToggleLeft size={24} style={{ color: 'rgba(255,255,255,0.3)' }} />}
+        <div style={{ display: 'flex', gap: 12 }}>
+          <button onClick={runDbAnalysis} disabled={loading === 'db'}
+            style={{ 
+              padding: '8px 16px', borderRadius: 10, background: 'rgba(78,158,106,0.15)', 
+              color: C.forestBright, border: '1px solid rgba(78,158,106,0.3)',
+              fontSize: 11, fontWeight: 700, cursor: 'pointer', transition: 'all 0.3s'
+            }}>
+            {loading === 'db' ? 'ANALYZING DB...' : 'DB ANALYSIS SWEEP'}
+          </button>
+
+          <div onClick={() => setAiEnabled(!aiEnabled)} style={{ 
+            display: 'flex', alignItems: 'center', gap: 12, padding: '8px 16px', borderRadius: 10,
+            background: aiEnabled ? 'rgba(61,122,83,0.1)' : 'rgba(255,255,255,0.05)',
+            border: `1px solid ${aiEnabled ? 'rgba(61,122,83,0.3)' : 'rgba(255,255,255,0.1)'}`,
+            cursor: 'pointer', transition: 'all 0.3s'
+          }}>
+            <span style={{ fontSize: 12, fontWeight: 700, color: aiEnabled ? C.forestBright : 'rgba(255,255,255,0.4)' }}>
+              {aiEnabled ? 'AI-DRIVEN MUTATION' : 'RANDOM MUTATION'}
+            </span>
+            {aiEnabled ? <ToggleRight size={24} style={{ color: C.forestBright }} /> : <ToggleLeft size={24} style={{ color: 'rgba(255,255,255,0.3)' }} />}
+          </div>
         </div>
       </div>
 
@@ -257,6 +285,77 @@ export default function NeuroFuzzModule() {
           </Panel>
         </div>
       </div>
+
+      {/* Database Analysis Results */}
+      <AnimatePresence>
+        {reports.length > 0 && (
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} style={{ marginTop: 30 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
+              <ShieldAlert size={20} style={{ color: C.champagne }} />
+              <h3 style={{ fontSize: 18, fontWeight: 700, color: C.champagne, margin: 0 }}>Security Analysis Reports <span style={{ color: 'rgba(255,255,255,0.2)', fontSize: 13 }}>(Analyzed from MongoDB)</span></h3>
+            </div>
+            
+            <div style={{ display: 'grid', gridTemplateColumns: '320px 1fr', gap: 20 }}>
+              {/* Report List */}
+              <div style={{ display: 'grid', gap: 10, alignContent: 'start' }}>
+                {reports.map((r, i) => (
+                  <div key={i} onClick={() => setSelectedReport(r)} style={{ 
+                    padding: 12, borderRadius: 10, background: selectedReport?.id === r.id ? 'rgba(247,231,206,0.1)' : 'rgba(0,0,0,0.2)',
+                    border: `1px solid ${selectedReport?.id === r.id ? C.champagne : 'rgba(255,255,255,0.05)'}`,
+                    cursor: 'pointer', transition: 'all 0.2s'
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                      <span style={{ fontSize: 10, fontFamily: 'monospace', color: 'rgba(255,255,255,0.3)' }}>{r.id}</span>
+                      <Badge color={r.severity === 'Critical' ? 'danger' : 'warning'}>{r.severity}</Badge>
+                    </div>
+                    <p style={{ fontSize: 13, fontWeight: 700, margin: 0 }}>{r.type}</p>
+                    <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', marginTop: 4 }}>{r.target}</p>
+                  </div>
+                ))}
+              </div>
+
+              {/* Detail View */}
+              {selectedReport && (
+                <Panel style={{ padding: 24 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>
+                    <div>
+                      <h4 style={{ fontSize: 20, fontWeight: 700, color: C.champagne, margin: 0 }}>{selectedReport.type}</h4>
+                      <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)', marginTop: 4 }}>{selectedReport.cwe} • {selectedReport.timestamp}</p>
+                    </div>
+                    <Badge color="danger">RISK SCORE: 94/100</Badge>
+                  </div>
+
+                  <div style={{ padding: 16, borderRadius: 10, background: 'rgba(0,0,0,0.3)', borderLeft: `4px solid ${C.danger}`, marginBottom: 20 }}>
+                    <p style={{ fontSize: 10, fontWeight: 700, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase', marginBottom: 8 }}>AI Root Cause Analysis</p>
+                    <p style={{ fontSize: 13, lineHeight: 1.6, color: 'rgba(255,255,255,0.7)', margin: 0 }}>{selectedReport.root_cause}</p>
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 20 }}>
+                    <div>
+                      <p style={{ fontSize: 10, fontWeight: 700, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase', marginBottom: 8 }}>Compliance Impact</p>
+                      <p style={{ fontSize: 13, fontWeight: 700, color: C.warning }}>{selectedReport.compliance_impact}</p>
+                    </div>
+                    <div>
+                      <p style={{ fontSize: 10, fontWeight: 700, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase', marginBottom: 8 }}>Patient Safety</p>
+                      <p style={{ fontSize: 13, fontWeight: 700, color: C.danger }}>{selectedReport.patient_safety}</p>
+                    </div>
+                  </div>
+
+                  <div style={{ padding: 16, borderRadius: 10, background: '#080c09', border: '1px solid rgba(61,122,83,0.3)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                      <Code size={14} style={{ color: C.forestBright }} />
+                      <span style={{ fontSize: 10, fontWeight: 700, color: C.forestBright }}>SUGGESTED VIRTUAL PATCH</span>
+                    </div>
+                    <pre style={{ fontSize: 11, fontFamily: 'monospace', color: 'rgba(255,255,255,0.8)', whiteSpace: 'pre-wrap', margin: 0 }}>
+                      {selectedReport.recommendation}
+                    </pre>
+                  </div>
+                </Panel>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

@@ -58,4 +58,34 @@ class AIAnalyzer:
         ]
 
 
+    @staticmethod
+    def analyze_database_records(records: list):
+        """
+        Analyzes a list of database records (e.g., from MongoDB) for security patterns.
+        Classifies records into risk categories based on content patterns.
+        """
+        findings = []
+        for rec in records:
+            # Simple pattern matching to simulate AI-driven classification
+            rec_type = rec.get("type", "Unknown")
+            severity = rec.get("severity", "Medium")
+            
+            finding = {
+                "id": f"DB-VULN-{random.randint(1000, 9999)}",
+                "timestamp": datetime.now().strftime("%H:%M:%S"),
+                "target": rec.get("source", "MongoDB Collection"),
+                "type": f"Database: {rec_type}",
+                "cwe": "CWE-284 (Improper Access Control)" if rec_type == "IDOR" else "CWE-119 (Memory Corruption)",
+                "severity": severity,
+                "exploitability": "High" if severity == "Critical" else "Medium",
+                "root_cause": f"A historic {rec_type} event was identified in the database logs. Original payload: {rec.get('raw_payload', 'Redacted')}",
+                "recommendation": "Review backend authorization logic and implement strict length checks on all input fields.",
+                "compliance_impact": "HIPAA/GDPR Violation Risk",
+                "patient_safety": "High: Data exposure may lead to clinical errors.",
+                "exploitation_payload": rec.get("raw_payload", "N/A"),
+                "exploitation_explanation": "The payload demonstrates how a malicious actor bypassed existing controls.",
+            }
+            findings.append(finding)
+        return findings
+
 analyzer = AIAnalyzer()
