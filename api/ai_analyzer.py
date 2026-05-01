@@ -1,6 +1,6 @@
 import random
 from datetime import datetime
-from api.ehr_db import get_all_vulnerabilities
+from ehr_db import get_all_vulnerabilities
 
 
 class AIAnalyzer:

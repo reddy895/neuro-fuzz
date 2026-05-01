@@ -67,21 +67,37 @@ export default function NeuroFuzzModule() {
   }, []);
 
   const fetchStats = async () => {
-    const res = await fetch(`${BASE}/api/ai/learning-stats`);
-    setStats(await res.json());
+    try {
+      const res = await fetch(`${BASE}/api/ai/learning-stats`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      setStats(await res.json());
+    } catch (e) {
+      console.error('Failed to fetch learning stats:', e);
+    }
   };
 
   const fetchPredictions = async () => {
-    const res = await fetch(`${BASE}/api/ai/predictions`);
-    const data = await res.json();
-    setPredictions(data.high_risk_regions);
+    try {
+      const res = await fetch(`${BASE}/api/ai/predictions`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      setPredictions(data.high_risk_regions);
+    } catch (e) {
+      console.error('Failed to fetch predictions:', e);
+    }
   };
 
   const generateInput = async (type) => {
     setLoading(type);
-    const res = await fetch(`${BASE}/api/ai/generate-smart-input?input_type=${type}`);
-    setSmartInput(await res.json());
-    setLoading('');
+    try {
+      const res = await fetch(`${BASE}/api/ai/generate-smart-input?input_type=${type}`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      setSmartInput(await res.json());
+    } catch (e) {
+      console.error('Failed to generate input:', e);
+    } finally {
+      setLoading('');
+    }
   };
 
   return (
@@ -221,8 +237,8 @@ export default function NeuroFuzzModule() {
                   <span style={{ color: 'rgba(255,255,255,0.5)' }}>Training Epochs</span>
                   <span style={{ fontWeight: 700 }}>{stats?.training_epochs} / 500</span>
                 </div>
-                <div style={{ h: 4, background: 'rgba(255,255,255,0.05)', borderRadius: 2 }}>
-                  <motion.div initial={{ width: 0 }} animate={{ width: '30%' }} style={{ h: '100%', background: C.champagne, borderRadius: 2 }} />
+                <div style={{ height: 4, background: 'rgba(255,255,255,0.05)', borderRadius: 2 }}>
+                  <motion.div initial={{ width: 0 }} animate={{ width: '30%' }} style={{ height: '100%', background: C.champagne, borderRadius: 2 }} />
                 </div>
               </div>
 

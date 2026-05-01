@@ -65,8 +65,13 @@ export default function AiRemediationModule() {
   }, []);
 
   const fetchAnalysis = async () => {
-    const res = await fetch(`${BASE}/api/ai/deep-analysis`);
-    setAnalysis(await res.json());
+    try {
+      const res = await fetch(`${BASE}/api/ai/deep-analysis`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      setAnalysis(await res.json());
+    } catch (e) {
+      console.error('Failed to fetch deep analysis:', e);
+    }
   };
 
   const startRemediation = async () => {
@@ -74,17 +79,23 @@ export default function AiRemediationModule() {
     setLogs([]);
     setDone(false);
 
-    const res = await fetch(`${BASE}/api/ai/remediate?vulnerability_id=GLOBAL_ARCH_FIX`, { method: 'POST' });
-    const data = await res.json();
-    
-    // Animate logs one by one
-    for (const log of data.remediation_log) {
-      setLogs(prev => [...prev, log]);
-      await new Promise(r => setTimeout(r, 600));
+    try {
+      const res = await fetch(`${BASE}/api/ai/remediate?vulnerability_id=GLOBAL_ARCH_FIX`, { method: 'POST' });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      
+      // Animate logs one by one
+      for (const log of data.remediation_log) {
+        setLogs(prev => [...prev, log]);
+        await new Promise(r => setTimeout(r, 600));
+      }
+      setDone(true);
+    } catch (e) {
+      setLogs(prev => [...prev, 'ERROR: Could not reach backend — is the server running?']);
+      console.error('Remediation failed:', e);
+    } finally {
+      setRemediating(false);
     }
-    
-    setRemediating(false);
-    setDone(true);
   };
 
   return (

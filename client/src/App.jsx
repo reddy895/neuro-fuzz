@@ -5,7 +5,8 @@ import {
   Cpu, HardDrive, BarChart3, Settings, Upload,
   Database, Brain, Play, Square, ChevronRight,
   Search, Bell, HeartPulse, FileText, Lock, Code2,
-  Microchip, Wifi, Flame, ChevronDown, CheckCircle2, Sparkles
+  Microchip, Wifi, Flame, ChevronDown, CheckCircle2, Sparkles,
+  RefreshCw
 } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import DicomModule from './DicomModule.jsx';
@@ -14,6 +15,7 @@ import NeuroFuzzModule from './NeuroFuzzModule.jsx';
 import ComplianceModule from './ComplianceModule.jsx';
 import AiRemediationModule from './AiRemediationModule.jsx';
 import SettingsModule from './SettingsModule.jsx';
+import IntelligenceModule from './IntelligenceModule.jsx';
 
 // ── Champagne/Forest color tokens ──────────────────────────────
 const C = {
@@ -109,22 +111,44 @@ export default function App() {
   const termRef = useRef(null);
 
   useEffect(() => {
-    fetch('http://127.0.0.1:8000/api/status').then(r => r.json()).then(d => {
-      setStats(d.stats); setLogs(d.logs); setRunning(d.running);
-    });
-    ws.current = new WebSocket('ws://127.0.0.1:8000/ws');
-    ws.current.onmessage = (ev) => {
-      const msg = JSON.parse(ev.data);
-      if (msg.type === 'init') {
-        setStats(msg.data.stats); setLogs(msg.data.logs); setRunning(msg.data.running);
-      } else if (msg.type === 'update') {
-        setStats(msg.stats);
-        if (msg.log) setLogs(p => [...p.slice(-79), msg.log]);
-        if (msg.latest_crash) setLatestCrash(msg.latest_crash);
-        setChartData(p => [...p.slice(-19), { t: new Date().toLocaleTimeString('en',{hour12:false,hour:'2-digit',minute:'2-digit',second:'2-digit'}), v: msg.stats.execs_per_sec }]);
-      }
+    fetch('http://127.0.0.1:8000/api/status')
+      .then(r => r.json())
+      .then(d => { setStats(d.stats); setLogs(d.logs); setRunning(d.running); })
+      .catch(() => console.warn('Backend unreachable — status fetch failed'));
+
+    let reconnectTimer = null;
+
+    const connect = () => {
+      const socket = new WebSocket('ws://127.0.0.1:8000/ws');
+      ws.current = socket;
+
+      socket.onmessage = (ev) => {
+        const msg = JSON.parse(ev.data);
+        if (msg.type === 'init') {
+          setStats(msg.data.stats); setLogs(msg.data.logs); setRunning(msg.data.running);
+        } else if (msg.type === 'update') {
+          setStats(msg.stats);
+          if (msg.log) setLogs(p => [...p.slice(-79), msg.log]);
+          if (msg.latest_crash) setLatestCrash(msg.latest_crash);
+          setChartData(p => [...p.slice(-19), { t: new Date().toLocaleTimeString('en',{hour12:false,hour:'2-digit',minute:'2-digit',second:'2-digit'}), v: msg.stats.execs_per_sec }]);
+        }
+      };
+
+      socket.onclose = () => {
+        reconnectTimer = setTimeout(connect, 3000);
+      };
+
+      socket.onerror = () => {
+        socket.close();
+      };
     };
-    return () => ws.current?.close();
+
+    connect();
+
+    return () => {
+      clearTimeout(reconnectTimer);
+      ws.current?.close();
+    };
   }, []);
 
   useEffect(() => { termRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [logs]);
@@ -169,8 +193,13 @@ export default function App() {
   };
 
   const runAIAnalysis = async () => {
-    const r = await fetch('http://127.0.0.1:8000/api/analyze');
-    setAiReport(await r.json());
+    try {
+      const r = await fetch('http://127.0.0.1:8000/api/analyze');
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      setAiReport(await r.json());
+    } catch (e) {
+      console.error('AI analysis failed:', e);
+    }
   };
 
   const uploadFirmware = async () => {
@@ -181,6 +210,7 @@ export default function App() {
     
     try {
       const res = await fetch(`http://127.0.0.1:8000/api/iot/analyze?file_index=${iotFileIdx}`, { method: 'POST' });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       
       // Simulate real binary analysis time
@@ -189,17 +219,22 @@ export default function App() {
       setIotFw(data);
       setIotLogs(p => [...p, `[${new Date().toLocaleTimeString()}] [INFO] AEGIS-IoT: Analysis complete for ${data.filename}`]);
     } catch (e) {
-      setIotLogs(p => [...p, `[${new Date().toLocaleTimeString()}] [ERROR] AEGIS-IoT: Connection refused.`]);
+      setIotLogs(p => [...p, `[${new Date().toLocaleTimeString()}] [ERROR] AEGIS-IoT: Connection refused — is the backend running?`]);
     } finally {
       setLoadingIot(false);
     }
   };
 
   const runFullSweep = async () => {
-    const r = await fetch('http://127.0.0.1:8000/api/analyze/all');
-    const data = await r.json();
-    setAllReports(data);
-    setSelectedReport(data[0]);
+    try {
+      const r = await fetch('http://127.0.0.1:8000/api/analyze/all');
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const data = await r.json();
+      setAllReports(data);
+      setSelectedReport(data[0]);
+    } catch (e) {
+      console.error('Full sweep failed:', e);
+    }
   };
 
   const logColor = (log) => {
@@ -733,6 +768,7 @@ export default function App() {
             { icon: Brain,          label: 'NeuroFuzz AI',        id: 'AI' },
             { icon: Sparkles,       label: 'AI Remediation',      id: 'Remediation' },
             { icon: FileText,       label: 'Compliance Reports',  id: 'Reports' },
+            { icon: Zap,            label: 'AegisIntel',          id: 'Intelligence' },
             { icon: Settings,       label: 'Settings',            id: 'Settings' },
           ].map(({ icon, label, id }) => (
             <SidebarItem key={id} icon={icon} label={label}
@@ -798,8 +834,9 @@ export default function App() {
               {activeModule === 'AI' && <NeuroFuzzModule />}
               {activeModule === 'Remediation' && <AiRemediationModule />}
               {activeModule === 'Reports' && <ComplianceModule />}
+              {activeModule === 'Intelligence' && <IntelligenceModule />}
               {activeModule === 'Settings' && <SettingsModule />}
-              {!['Dashboard','IoT','DICOM','EHR','AI','Reports','Remediation','Settings'].includes(activeModule) && (
+              {!['Dashboard','IoT','DICOM','EHR','AI','Reports','Remediation','Intelligence','Settings'].includes(activeModule) && (
                 <div className="h-80 flex flex-col items-center justify-center text-center">
                   <Shield size={40} className="mb-4" style={{ color: 'rgba(247,231,206,0.15)' }} />
                   <h3 className="text-lg font-bold mb-2" style={{ color: C.champagne }}>{activeModule} Module</h3>

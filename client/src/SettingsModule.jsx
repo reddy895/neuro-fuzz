@@ -43,18 +43,28 @@ export default function SettingsModule() {
 
   useEffect(() => {
     fetch(`${BASE}/api/settings`)
-      .then(res => res.json())
-      .then(data => setConfig(data));
+      .then(res => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.json();
+      })
+      .then(data => setConfig(data))
+      .catch(e => console.error('Failed to load settings:', e));
   }, []);
 
   const handleSave = async () => {
     setSaving(true);
-    await fetch(`${BASE}/api/settings`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(config)
-    });
-    setTimeout(() => setSaving(false), 800);
+    try {
+      const res = await fetch(`${BASE}/api/settings`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(config)
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    } catch (e) {
+      console.error('Failed to save settings:', e);
+    } finally {
+      setTimeout(() => setSaving(false), 800);
+    }
   };
 
   const update = (key, val) => setConfig(prev => ({ ...prev, [key]: val }));

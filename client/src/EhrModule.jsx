@@ -114,12 +114,18 @@ export default function EhrModule() {
   const simulateBreach = async () => {
     setIsBreaching(true);
     setBreachData(null);
-    const res = await fetch(`${BASE}/api/ehr/simulate-breach`, { method: 'POST' });
-    const data = await res.json();
-    setTimeout(() => {
-      setBreachData(data);
+    try {
+      const res = await fetch(`${BASE}/api/ehr/simulate-breach`, { method: 'POST' });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      setTimeout(() => {
+        setBreachData(data);
+        setIsBreaching(false);
+      }, 2000);
+    } catch (e) {
+      console.error('Breach simulation failed:', e);
       setIsBreaching(false);
-    }, 2000);
+    }
   };
 
   return (
